@@ -186,7 +186,7 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
     def change_approved(self, before, after):
         if before == after:
             return False, "same"
-        if len(after) > self.context_len / 4:  # approx. 4 bytes per token
+        if len(after) > self.context_len / 4 / 2:  # approx. 4 bytes per token, don't use more than half of context
             return False, "too long"
         if self.prompt_templates['base'] in after:
             return False, "prompt leaked 1"
