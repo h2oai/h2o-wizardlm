@@ -50,6 +50,7 @@ class WizardLM:
             "What are OKRs useful for?",
         ]
         self.prompts = []
+        self.final_prompts = []
         self.prompt_templates = dict()
         self.prompt_templates['base'] = "Act like a very intelligent person."
         self.prompt_templates[Mutation.COMPLICATE] = \
@@ -108,13 +109,13 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
 """
 
     def run(self):
-        self.create_base_corpus()
-        self.create_qa_pairs()
+        self.create_seed_prompts()
+        self.create_prompts()
         import pickle
         with open("prompts.pickle", "wb") as f:
-            f.write(pickle.dumps(self.prompts))
+            f.write(pickle.dumps(self.final_prompts))
 
-    def create_base_corpus(self):
+    def create_seed_prompts(self):
         """
         Turn self.seed_data into a list of strings of text self.source_text_list
         Each text string can represent as little as a word, or as much as document.
@@ -135,17 +136,13 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
             assert isinstance(self.seed_text_list, list)
             self.seed_text_list = self.seed_data
 
-    def extract_initial_instructions(self):
+    def create_prompts(self):
+        assert self.seed_text_list, "must have seed text list"
         self.prompts.clear()
         for i in range(self.num_output_qa_pairs):
             self.prompts.append(np.random.choice(self.seed_text_list))
-        assert len(self.prompts) == self.num_output_qa_pairs
-
-    def create_qa_pairs(self):
-        assert self.seed_text_list, "must have seed text list"
-        self.extract_initial_instructions()
         i = 0
-        while self.mutate() and i <= 4:
+        while self.mutate():
             print("Iteration: %d" % i)
             i += 1
 
@@ -177,11 +174,17 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
             if something_changed:
                 all_something_changed = True
                 self.prompts[i] = after
-                print("Accepted")
+                print("Mutation successful")
             else:
-                print("Rejected: %s" % why)
+                if why == "too long":
+                    self.final_prompts.append(after)
+                    print("Prompt accepted, now have %d good prompts." % len(self.final_prompts))
+                    self.prompts[i] = np.random.choice(self.seed_text_list)
+                    print("Creating new prompt")
+                else:
+                    print("Mutation rejected, will try again. Reason: %s" % why)
             print("", flush=True)
-        return all_something_changed
+        return len(self.final_prompts) < self.num_output_qa_pairs
 
     def change_approved(self, before, after):
         if before == after:
