@@ -64,10 +64,10 @@ Add more constraints or requirements to #Given Prompt#. Create #New Prompt#.
         self.prompt_templates[Mutation.DEEPEN] = \
             self.prompt_templates['base'] + \
 """
+Increase the depth and breadth of #Given Prompt#. Create #New Prompt#.
+
 #Given Prompt#:
 <PROMPT>
-
-Increase the depth and breadth of #Given Prompt#. Create #New Prompt#.
 """
 
         self.prompt_templates[Mutation.CONCRETIZE] = \
@@ -136,7 +136,7 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
         assert self.seed_text_list, "must have seed text list"
         self.extract_initial_instructions()
         i = 0
-        while self.mutate() or i < 10:
+        while self.mutate() or i < 4:
             print("Iteration: %d" % i)
             i += 1
 
@@ -146,38 +146,41 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
         for i in range(self.num_output_qa_pairs):
             mutation = np.random.choice(Mutation)
             before = self.prompts[i]
-            print("===========================")
-            print("Before: %s" % before)
-            print("===========================")
-            assert '<PROMPT>' in self.prompt_templates[mutation]
+            # print("===========================")
+            # print("Before: %s" % before)
+            # print("===========================")
+            assert "<PROMPT>" in self.prompt_templates[mutation]
             prompt = self.prompt_templates[mutation].replace("<PROMPT>", before)
             print("===========================")
-            print("Mutation: %s\nPrompt:\n%s" % (mutation.name, prompt))
-            print("===========================")
+            print("Mutation: %s" % (mutation.name))
+            # print("Mutation: %s\nPrompt:\n%s" % (mutation.name, prompt))
+            # print("===========================")
             t0 = time.time()
             after = self.llm(prompt)
             t1 = time.time()
             print("LLM took %.4f seconds" % (t1 - t0))
             after = after.split("Prompt#:")[-1].strip()
-            print("===========================")
-            print("After: %s" % after)
+            # print("===========================")
+            print("%s" % after)
             print("===========================")
 
-            something_changed = self.change_approved(before, after)
+            something_changed, why = self.change_approved(before, after)
             if something_changed:
                 all_something_changed = True
                 self.prompts[i] = after
                 print("Accepted")
             else:
-                print("Rejected")
+                print("Rejected: %s" % why)
             print("", flush=True)
         return all_something_changed
 
     def change_approved(self, before, after):
         if before == after:
-            return False
+            return False, "same"
+        if self.prompt_templates['base'] in after:
+            return False, "prompt leaked"
         if "sorry" in after.lower() and "sorry" not in before.lower() and len(after) < 400:
-            return False
+            return False, "sorry"
         prompt = """Are the two following prompts equal to each other?
 To be equal, they must meet two requirements:
 1. Both prompts have the same constraints and requirements.
@@ -187,8 +190,8 @@ Second prompt: %s
 Answer with 'Equal' or 'Not Equal'. No need to explain the reason.""" % (before, after)
         answer = self.llm(prompt)
         if 'not equal' not in answer.lower():
-            return False
-        return True
+            return False, "equal"
+        return True, "ok"
 
 
 class LLM:
