@@ -21,7 +21,8 @@ class WizardLM:
             self,
             llm=None,
             seed_data=None,
-            num_output_qa_pairs=10
+            num_output_qa_pairs=10,
+            context_len=2048,
     ):
         """
         Create base class
@@ -29,16 +30,24 @@ class WizardLM:
         :param llm: Method that takes a string and returns a string
         :param seed_data: Optional data to create Q:A pairs from
         :param num_output_qa_pairs: Number of desired Q:A pairs
+        :param context_len: Context length, used to limit the created prompts
         """
         self.llm = llm
         self.num_output_qa_pairs = num_output_qa_pairs
+        self.context_len = context_len
         self.seed_text_list = []
         self.seed_data = seed_data or [
-            # "What is 1 + 1?",
-            # "What's trending in science & technology?",
-            # "What's the meaning of life?",
+            "What is e^(i*Pi)?",
+            "What's trending in science & technology?",
+            "What's the meaning of life?",
             "Why is drinking water important?",
-            # "What's the difference between dogs and cats?",
+            "What's the difference between dogs and cats?",
+            "Tell me a joke.",
+            "Tell me about quantum physics.",
+            "Tell me about modern art.",
+            "Why should I learn to play the violin?",
+            "Is it better to spend money or save money?",
+            "What are OKRs useful for?",
         ]
         self.prompts = []
         self.prompt_templates = dict()
@@ -46,7 +55,7 @@ class WizardLM:
         self.prompt_templates[Mutation.COMPLICATE] = \
             self.prompt_templates['base'] + \
 """
-Rewrite #Given Prompt# to make it more complicated. Create #New Prompt#.
+Rewrite #Given Prompt# to make it slightly more complicated. Create #New Prompt#.
 
 #Given Prompt#:
 <PROMPT>
@@ -55,7 +64,7 @@ Rewrite #Given Prompt# to make it more complicated. Create #New Prompt#.
         self.prompt_templates[Mutation.ADD_CONSTRAINTS] = \
             self.prompt_templates['base'] + \
 """
-Add more constraints or requirements to #Given Prompt#. Create #New Prompt#.
+Add a few more constraints or requirements to #Given Prompt#. Create #New Prompt#.
 
 #Given Prompt#:
 <PROMPT>
@@ -64,7 +73,7 @@ Add more constraints or requirements to #Given Prompt#. Create #New Prompt#.
         self.prompt_templates[Mutation.DEEPEN] = \
             self.prompt_templates['base'] + \
 """
-Increase the depth and breadth of #Given Prompt#. Create #New Prompt#.
+Slightly increase the depth and breadth of #Given Prompt#. Create #New Prompt#.
 
 #Given Prompt#:
 <PROMPT>
@@ -73,7 +82,7 @@ Increase the depth and breadth of #Given Prompt#. Create #New Prompt#.
         self.prompt_templates[Mutation.CONCRETIZE] = \
             self.prompt_templates['base'] + \
 """
-Make #Given Prompt# more concrete. Create #New Prompt#.
+Make #Given Prompt# slightly more concrete. Create #New Prompt#.
 
 #Given Prompt#:
 <PROMPT>
@@ -136,7 +145,7 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
         assert self.seed_text_list, "must have seed text list"
         self.extract_initial_instructions()
         i = 0
-        while self.mutate() or i < 4:
+        while self.mutate() and i <= 4:
             print("Iteration: %d" % i)
             i += 1
 
@@ -177,20 +186,28 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
     def change_approved(self, before, after):
         if before == after:
             return False, "same"
+        if len(after) > self.context_len / 4:  # approx. 4 bytes per token
+            return False, "too long"
         if self.prompt_templates['base'] in after:
-            return False, "prompt leaked"
+            return False, "prompt leaked 1"
+        if "#New Prompt#" in after:
+            return False, "prompt leaked 2"
+        if "new prompt" in after:
+            return False, "prompt leaked 3"
         if "sorry" in after.lower() and "sorry" not in before.lower() and len(after) < 400:
             return False, "sorry"
-        prompt = """Are the two following prompts equal to each other?
-To be equal, they must meet two requirements:
-1. Both prompts have the same constraints and requirements.
-2. Both prompts have the same depth and breath of the inquiry.
-First prompt: %s
-Second prompt: %s
-Answer with 'Equal' or 'Not Equal'. No need to explain the reason.""" % (before, after)
-        answer = self.llm(prompt)
-        if 'not equal' not in answer.lower():
-            return False, "equal"
+        if False:
+            # too slow in general, not needed
+            prompt = """Are the two following prompts equal to each other?
+    To be equal, they must meet two requirements:
+    1. Both prompts have the same constraints and requirements.
+    2. Both prompts have the same depth and breath of the inquiry.
+    First prompt: %s
+    Second prompt: %s
+    Answer with 'Equal' or 'Not Equal'. No need to explain the reason.""" % (before, after)
+            answer = self.llm(prompt)
+            if 'not equal' not in answer.lower():
+                return False, "equal"
         return True, "ok"
 
 
@@ -224,7 +241,8 @@ if __name__ == "__main__":
             # num_beams=2,
         ),
         seed_data=seed_data,
-        num_output_qa_pairs=1,
+        num_output_qa_pairs=5,
+        context_len=2048,
     )
     wizardlm.run()
 
