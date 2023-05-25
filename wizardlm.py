@@ -1,10 +1,15 @@
+from typing import List
+
 import pandas as pd
 import numpy as np
 from enum import Enum
 
 import time
 import torch
+from datasets import Dataset, DatasetDict
 from transformers import pipeline
+from transformers.pipelines.pt_utils import KeyDataset
+from tqdm.auto import tqdm
 
 
 class Mutation(Enum):
@@ -19,22 +24,25 @@ class Mutation(Enum):
 class WizardLM:
     def __init__(
             self,
-            llm=None,
-            seed_data=None,
-            num_output_qa_pairs=10,
-            context_len=2048,
+            llm_pipeline: pipeline = None,
+            seed_data: List[str] = None,
+            num_rows: int = 10,
+            context_len: int = 2048,
+            verbose: bool = False,
     ):
         """
-        Create base class
+        Open-Source Implementation of https://arxiv.org/abs/2304.12244
 
-        :param llm: Method that takes a string and returns a string
-        :param seed_data: Optional data to create Q:A pairs from
-        :param num_output_qa_pairs: Number of desired Q:A pairs
+        :param llm_pipeline: Pipeline that takes a HF dataset containing one string column and returns a list of strings
+        :param seed_data: Optional data to create Q:A pairs from, list of strings
+        :param num_rows: Number of desired Q:A pairs
         :param context_len: Context length, used to limit the created prompts
+        :param verbose: Whether to enable verbose printing.
         """
-        self.llm = llm
-        self.num_output_qa_pairs = num_output_qa_pairs
+        self.llm_pipeline = llm_pipeline
+        self.num_rows = num_rows
         self.context_len = context_len
+        self.verbose = verbose
         self.seed_text_list = []
         self.seed_data = seed_data or [
             "What is e^(i*Pi)?",
@@ -51,6 +59,7 @@ class WizardLM:
         ]
         self.prompts = []
         self.final_prompts = []
+        self.final_answers = []
         self.prompt_templates = dict()
         self.prompt_templates['base'] = "Act like a very intelligent person."
         self.prompt_templates[Mutation.COMPLICATE] = \
@@ -114,6 +123,21 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
         import pickle
         with open("prompts.pickle", "wb") as f:
             f.write(pickle.dumps(self.final_prompts))
+        self.create_answers()
+        with open("responses.pickle", "wb") as f:
+            f.write(pickle.dumps(self.final_answers))
+        list_qa = []
+        for i in range(len(self.final_prompts)):
+            list_qa.append(
+                {
+                    'input': self.final_prompts[i],
+                    'output': self.final_answers[i],
+                }
+            )
+        import json
+        import uuid
+        with open("wizard_lm.%s.json" % str(uuid.uuid4())[:4], "wt") as f:
+            f.write(json.dumps(list_qa, indent=2))
 
     def create_seed_prompts(self):
         """
@@ -137,42 +161,67 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
             self.seed_text_list = self.seed_data
 
     def create_prompts(self):
+        print("Creating %d prompts." % self.num_rows)
         assert self.seed_text_list, "must have seed text list"
+        t0 = time.time()
         self.prompts.clear()
-        for i in range(self.num_output_qa_pairs):
+        for i in range(self.num_rows):
             self.prompts.append(np.random.choice(self.seed_text_list))
         i = 0
         while self.mutate():
             print("Iteration: %d" % i)
             i += 1
+        t1 = time.time()
+        print("Done creating %d prompts in %.4f seconds." % (len(self.final_prompts), t1 - t0))
         print(self.final_prompts)
 
+    def create_answers(self):
+        print("Creating answers for %d prompts." % len(self.final_prompts))
+        t0 = time.time()
+        ds = self.convert_list_to_dataset(self.final_prompts)
+        self.final_answers = self.llm_pipeline(ds['train'])
+        t1 = time.time()
+        print("Done creating answers for %d prompts in %.4f seconds." % (ds['train'].num_rows, t1 - t0))
+
+    def convert_list_to_dataset(self, text_list):
+        df = pd.DataFrame({'text': text_list})
+        ds = DatasetDict()
+        ds['train'] = Dataset.from_pandas(df)
+        return ds
+
     def mutate(self):
-        assert len(self.prompts) == self.num_output_qa_pairs
-        for i in range(self.num_output_qa_pairs):
+        assert len(self.prompts) == self.num_rows
+        list_prompts = []
+        for i in range(self.num_rows):
             mutation = np.random.choice(Mutation)
             before = self.prompts[i]
-            # print("===========================")
-            # print("Before: %s" % before)
-            # print("===========================")
             assert "<PROMPT>" in self.prompt_templates[mutation]
             prompt = self.prompt_templates[mutation].replace("<PROMPT>", before)
+            list_prompts.append(prompt)
+            if self.verbose:
+                print("===========================")
+                print("Before: %s" % before)
+                print("Mutation: %s" % mutation.name)
+                print("After: %s" % prompt)
+                print("===========================")
+
+        ds = self.convert_list_to_dataset(list_prompts)
+        assert ds['train'].num_rows == len(list_prompts) == self.num_rows
+        t0 = time.time()
+        after = self.llm_pipeline(ds['train'])
+        assert len(after) == len(self.prompts)
+        t1 = time.time()
+        print("LLMPipeline took %.4f seconds" % (t1 - t0))
+
+        for i in range(len(after)):
+            after[i] = after[i].split("Prompt#:")[-1].strip()
             print("===========================")
-            print("Mutation: %s" % (mutation.name))
-            # print("Mutation: %s\nPrompt:\n%s" % (mutation.name, prompt))
-            # print("===========================")
-            t0 = time.time()
-            after = self.llm(prompt)
-            t1 = time.time()
-            print("LLM took %.4f seconds" % (t1 - t0))
-            after = after.split("Prompt#:")[-1].strip()
-            # print("===========================")
-            print("%s" % after)
+            print("%s" % after[i])
             print("===========================")
 
-            something_changed, why = self.change_approved(before, after)
+            something_changed, why = self.change_approved(self.prompts[i], after[i])
             if something_changed:
-                self.prompts[i] = after
+                self.prompts[i] = after[i]
                 print("Mutation successful")
             else:
                 if why == "too long":
@@ -183,7 +232,7 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
                 else:
                     print("Mutation rejected, will try again. Reason: %s" % why)
             print("", flush=True)
-        return len(self.final_prompts) < self.num_output_qa_pairs
+        return len(self.final_prompts) < self.num_rows
 
     def change_approved(self, before, after):
         if before == after:
@@ -201,39 +250,61 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
         if False:
             # too slow in general, not needed
             prompt = """Are the two following prompts equal to each other?
-    To be equal, they must meet two requirements:
-    1. Both prompts have the same constraints and requirements.
-    2. Both prompts have the same depth and breath of the inquiry.
-    First prompt: %s
-    Second prompt: %s
-    Answer with 'Equal' or 'Not Equal'. No need to explain the reason.""" % (before, after)
-            answer = self.llm(prompt)
+To be equal, they must meet two requirements:
+1. Both prompts have the same constraints and requirements.
+2. Both prompts have the same depth and breath of the inquiry.
+First prompt: %s
+Second prompt: %s
+Answer with 'Equal' or 'Not Equal'. No need to explain the reason.""" % (before, after)
+            answer = self.llm_pipeline(prompt)
             if 'not equal' not in answer.lower():
                 return False, "equal"
         return True, "ok"
 
 
-class LLM:
-    def __init__(self, model, max_new_tokens=None, **kwargs):
-        self.generate_text = pipeline(
+class LLMPipeline:
+    def __init__(self, model, max_new_tokens=None, batch_size=None, **kwargs):
+        from transformers import AutoTokenizer, AutoModelForCausalLM
+        tokenizer = AutoTokenizer.from_pretrained(model, padding_side="left")
+        model_obj = AutoModelForCausalLM.from_pretrained(model, torch_dtype=torch.bfloat16, device_map="auto")
+        pad_token_id = model_obj.config.eos_token_id
+        del model_obj
+        self.pipeline = pipeline(
             model=model,
+            tokenizer=tokenizer,
             torch_dtype=torch.bfloat16,
             trust_remote_code=True,
             device_map="auto",
             **kwargs,
         )
+        self.pipeline.tokenizer.pad_token_id = pad_token_id
         self.max_new_tokens = max_new_tokens
+        self.batch_size = batch_size
 
-    def __call__(self, prompt):
-        res = self.generate_text(prompt, max_new_tokens=self.max_new_tokens)
-        return res[0]["generated_text"]
+    def __call__(self, dataset):
+        """
+        Passes dataset to LLM and returns the responses.
+        :param dataset:  Hugging Face dataset containing a 'text' column with prompts.
+        :return: list of strings with responses.
+        """
+        ret = []
+        for out in tqdm(
+                self.pipeline(
+                    KeyDataset(dataset, "text"),
+                    max_new_tokens=self.max_new_tokens,
+                    batch_size=self.batch_size,
+                )
+        ):
+            ret.append(out[0]["generated_text"])
+        return ret
 
 
 if __name__ == "__main__":
     seed_data = None
     wizardlm = WizardLM(
-        llm=LLM(
+        llm_pipeline=LLMPipeline(
             "junelee/wizard-vicuna-13b",
+            # "h2oai/h2ogpt-oig-oasst1-512-6_9b",
             # "h2oai/h2ogpt-oasst1-512-12b",
             # "h2oai/h2ogpt-oasst1-512-20b",
             max_new_tokens=512,
@@ -241,9 +312,10 @@ if __name__ == "__main__":
             # top_k=4,
             # do_sample=True,
             # num_beams=2,
+            batch_size=8,
         ),
         seed_data=seed_data,
-        num_output_qa_pairs=100,
+        num_rows=8,
         context_len=2048,
     )
     wizardlm.run()
