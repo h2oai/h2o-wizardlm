@@ -145,10 +145,10 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
         while self.mutate():
             print("Iteration: %d" % i)
             i += 1
+        print(self.final_prompts)
 
     def mutate(self):
         assert len(self.prompts) == self.num_output_qa_pairs
-        all_something_changed = False
         for i in range(self.num_output_qa_pairs):
             mutation = np.random.choice(Mutation)
             before = self.prompts[i]
@@ -172,7 +172,6 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
 
             something_changed, why = self.change_approved(before, after)
             if something_changed:
-                all_something_changed = True
                 self.prompts[i] = after
                 print("Mutation successful")
             else:
@@ -244,7 +243,7 @@ if __name__ == "__main__":
             # num_beams=2,
         ),
         seed_data=seed_data,
-        num_output_qa_pairs=5,
+        num_output_qa_pairs=100,
         context_len=2048,
     )
     wizardlm.run()
