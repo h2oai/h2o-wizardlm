@@ -228,9 +228,8 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
                 print("Prompt was successfully modified.")
             else:
                 if why == "too long":
-                    after[i] = self.prompts[i]
-                    self.final_prompts.append(after[i])
-                    print("Prompt accepted, now have %d good prompts." % len(self.final_prompts))
+                    self.final_prompts.append(self.prompts[i])
+                    print("Prompt got too complex, previous prompt accepted, now have %d good prompts." % len(self.final_prompts))
                     self.prompts[i] = np.random.choice(self.seed_text_list)
                     self.counters[i] = 0
                     print("Creating new prompt.")
