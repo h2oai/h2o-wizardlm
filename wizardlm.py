@@ -301,14 +301,15 @@ class LLMPipeline:
         :return: list of strings with responses.
         """
         ret = []
-        for out in tqdm(
+        for i, out in enumerate(tqdm(
                 self.pipeline(
                     KeyDataset(dataset, "text"),
                     max_new_tokens=self.max_new_tokens,
                     batch_size=self.batch_size,
                 )
-        ):
-            ret.append(out[0]["generated_text"])
+        )):
+            # remove input in case pipeline is using completion/plain prompt
+            ret.append(out[0]["generated_text"].replace(dataset[i]['text'], ''))
         return ret
 
 
