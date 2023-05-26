@@ -246,7 +246,7 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
     def change_approved(self, before, after):
         if before == after:
             return False, "same"
-        if len(after) > self.context_len / 4 / 2:  # approx. 4 bytes per token, don't use more than half of context
+        if len(after) > min(1024, self.context_len // 2):  # approx. 1kB is enough (~256 tokens) in general
             return False, "too long"
         if self.prompt_templates['base'] in after:
             return False, "prompt leaked 1"
@@ -321,7 +321,7 @@ if __name__ == "__main__":
             # "h2oai/h2ogpt-oig-oasst1-512-6_9b",
             # "h2oai/h2ogpt-oasst1-512-12b",
             # "h2oai/h2ogpt-oasst1-512-20b",
-            max_new_tokens=256,
+            max_new_tokens=512,
             # temperature=0.3,
             # top_k=4,
             # do_sample=True,
