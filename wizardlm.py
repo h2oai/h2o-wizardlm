@@ -45,18 +45,20 @@ class WizardLM:
         self.verbose = verbose
         self.seed_text_list = []
         self.seed_data = seed_data or [
-            "What is e^(i*Pi)?",
+            "What is e^(i*pi)?",
             "What's trending in science & technology?",
             "What's the meaning of life?",
             "Why is drinking water important?",
             "What's the difference between dogs and cats?",
             "Tell me a joke.",
+            "Come up with a random topic that might be interesting to university professor.",
             "Tell me about quantum physics.",
             "Tell me about modern art.",
             "Why should I learn to play the violin?",
             "Is it better to spend money or save money?",
             "What are OKRs useful for?",
         ]
+        self.counters = []
         self.prompts = []
         self.final_prompts = []
         self.final_answers = []
@@ -167,6 +169,7 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
         self.prompts.clear()
         for i in range(self.num_rows):
             self.prompts.append(np.random.choice(self.seed_text_list))
+            self.counters.append(0)
         i = 0
         while self.mutate():
             print("Iteration: %d" % i)
@@ -206,14 +209,15 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
                 print("===========================")
 
         ds = self.convert_list_to_dataset(list_prompts)
-        assert ds['train'].num_rows == len(list_prompts) == self.num_rows
+        assert ds['train'].num_rows == len(list_prompts) == self.num_rows == len(self.prompts)
         t0 = time.time()
         after = self.llm_pipeline(ds['train'])
-        assert len(after) == len(self.prompts)
+        assert len(after) == self.num_rows
         t1 = time.time()
         print("LLMPipeline took %.4f seconds" % (t1 - t0))
 
         for i in range(len(after)):
+            self.counters[i] += 1
             after[i] = after[i].split("Prompt#:")[-1].strip()
             print("===========================")
             print("%s" % after[i])
@@ -225,10 +229,15 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
                 print("Mutation successful")
             else:
                 if why == "too long":
-                    self.final_prompts.append(after)
+                    self.final_prompts.append(after[i])
                     print("Prompt accepted, now have %d good prompts." % len(self.final_prompts))
                     self.prompts[i] = np.random.choice(self.seed_text_list)
+                    self.counters[i] = 0
                     print("Creating new prompt")
+                elif self.counters[i] > 10:
+                    print("Prompt failed to evolve, restarting")
+                    self.prompts[i] = np.random.choice(self.seed_text_list)
+                    self.counters[i] = 0
                 else:
                     print("Mutation rejected, will try again. Reason: %s" % why)
             print("", flush=True)
@@ -265,10 +274,13 @@ Answer with 'Equal' or 'Not Equal'. No need to explain the reason.""" % (before,
 class LLMPipeline:
     def __init__(self, model, max_new_tokens=None, batch_size=None, **kwargs):
         from transformers import AutoTokenizer, AutoModelForCausalLM
+        print("loading tokenizer")
         tokenizer = AutoTokenizer.from_pretrained(model, padding_side="left")
+        print("loading model")
         model_obj = AutoModelForCausalLM.from_pretrained(model, torch_dtype=torch.bfloat16, device_map="auto")
         pad_token_id = model_obj.config.eos_token_id
         del model_obj
+        print("loading pipeline")
         self.pipeline = pipeline(
             model=model,
             tokenizer=tokenizer,
@@ -277,6 +289,7 @@ class LLMPipeline:
             device_map="auto",
             **kwargs,
         )
+        print("loading pipeline done.")
         self.pipeline.tokenizer.pad_token_id = pad_token_id
         self.max_new_tokens = max_new_tokens
         self.batch_size = batch_size
@@ -307,7 +320,7 @@ if __name__ == "__main__":
             # "h2oai/h2ogpt-oig-oasst1-512-6_9b",
             # "h2oai/h2ogpt-oasst1-512-12b",
             # "h2oai/h2ogpt-oasst1-512-20b",
-            max_new_tokens=512,
+            max_new_tokens=256,
             # temperature=0.3,
             # top_k=4,
             # do_sample=True,
