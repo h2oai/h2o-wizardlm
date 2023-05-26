@@ -309,7 +309,9 @@ class LLMPipeline:
                 )
         )):
             # remove input in case pipeline is using completion/plain prompt
-            ret.append(out[0]["generated_text"].replace(dataset[i]['text'], ''))
+            response = out[0]["generated_text"]
+            response = response.replace(dataset[i]['text'], '').strip()
+            ret.append(response)
         return ret
 
 
