@@ -214,7 +214,7 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
         after = self.llm_pipeline(ds['train'])
         assert len(after) == self.num_rows
         t1 = time.time()
-        print("LLMPipeline took %.4f seconds" % (t1 - t0))
+        print("HFPipeline took %.4f seconds" % (t1 - t0))
 
         for i in range(len(after)):
             self.counters[i] += 1
@@ -274,7 +274,25 @@ Answer with 'Equal' or 'Not Equal'. No need to explain the reason.""" % (before,
         return True, "ok"
 
 
-class LLMPipeline:
+class GradioClientPipeline:
+    def __init__(self, host, **kwargs):
+        from gradio_client import Client
+        self.client = Client(host)
+        self.kwargs = kwargs
+
+    def __call__(self, dataset):
+        ret = []
+        for d in dataset:
+            self.kwargs['instruction_nochat'] = d['text']
+            res = self.client.predict(
+                *tuple(list(self.kwargs.values())),
+                api_name='/submit_nochat'
+            )
+            ret.append(res)
+        return ret
+
+
+class HFPipeline:
     def __init__(self, model, max_new_tokens=None, batch_size=None, **kwargs):
         from transformers import AutoTokenizer, AutoModelForCausalLM
         print("loading tokenizer")
@@ -320,8 +338,9 @@ class LLMPipeline:
 
 if __name__ == "__main__":
     seed_data = None
-    wizardlm = WizardLM(
-        llm_pipeline=LLMPipeline(
+
+    if True:
+        llm_pipeline = HFPipeline(
             "junelee/wizard-vicuna-13b",
             # "h2oai/h2ogpt-oig-oasst1-512-6_9b",
             # "h2oai/h2ogpt-oasst1-512-12b",
@@ -332,7 +351,37 @@ if __name__ == "__main__":
             # do_sample=True,
             # num_beams=2,
             batch_size=8,
-        ),
+        )
+
+    if False:
+        llm_pipeline = GradioClientPipeline(
+            "http://localhost:7860",
+            instruction='',
+            iinput='',  # only for chat=True
+            context='',
+            stream_output=False,
+            prompt_type='human_bot',
+            temperature=0.1,
+            top_p=0.75,
+            top_k=40,
+            num_beams=1,
+            max_new_tokens=512,
+            min_new_tokens=0,
+            early_stopping=False,
+            max_time=20,
+            repetition_penalty=1.0,
+            num_return_sequences=1,
+            do_sample=False,
+            chat=False,
+            instruction_nochat='', ## Will be set to prompt
+            iinput_nochat='',
+            langchain_mode='Disabled',
+            top_k_docs=4,
+            document_choice=['All'],
+        )
+
+    wizardlm = WizardLM(
+        llm_pipeline=llm_pipeline,
         seed_data=seed_data,
         num_rows=8,
         context_len=2048,
