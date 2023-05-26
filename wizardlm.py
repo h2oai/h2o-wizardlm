@@ -216,21 +216,19 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
             self.counters[i] += 1
             after[i] = after[i].split("Prompt#:")[-1].strip()
             use_new_prompt, why = self.change_approved(self.prompts[i], after[i])
-            if why == "too long":
-                # use (and print) previous iteration, getting too long
-                after[i] = self.prompts[i]
-            print("===========================")
             if self.verbose:
+                print("===========================")
                 print("Old Prompt: %s" % self.prompts[i])
                 print("Mutation: %s" % mutations[i].name)
-            print("New Prompt: %s" % after[i])
-            print("===========================")
+                print("New Prompt: %s" % after[i])
+                print("===========================")
 
             if use_new_prompt:
                 self.prompts[i] = after[i]
                 print("Prompt was successfully modified.")
             else:
                 if why == "too long":
+                    after[i] = self.prompts[i]
                     self.final_prompts.append(after[i])
                     print("Prompt accepted, now have %d good prompts." % len(self.final_prompts))
                     self.prompts[i] = np.random.choice(self.seed_text_list)
