@@ -195,18 +195,14 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
     def mutate(self):
         assert len(self.prompts) == self.num_rows
         list_prompts = []
+        mutations = []
         for i in range(self.num_rows):
             mutation = np.random.choice(Mutation)
+            mutations.append(mutation)
             before = self.prompts[i]
             assert "<PROMPT>" in self.prompt_templates[mutation]
             prompt = self.prompt_templates[mutation].replace("<PROMPT>", before)
             list_prompts.append(prompt)
-            if self.verbose:
-                print("===========================")
-                print("Before: %s" % before)
-                print("Mutation: %s" % mutation.name)
-                print("After: %s" % prompt)
-                print("===========================")
 
         ds = self.convert_list_to_dataset(list_prompts)
         assert ds['train'].num_rows == len(list_prompts) == self.num_rows == len(self.prompts)
@@ -224,7 +220,10 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
                 # use (and print) previous iteration, getting too long
                 after[i] = self.prompts[i]
             print("===========================")
-            print("%s" % after[i])
+            if self.verbose:
+                print("Old Prompt: %s" % self.prompts[i])
+                print("Mutation: %s" % mutations[i].name)
+            print("New Prompt: %s" % after[i])
             print("===========================")
 
             if use_new_prompt:
@@ -385,6 +384,7 @@ if __name__ == "__main__":
         seed_data=seed_data,
         num_rows=8,
         context_len=2048,
+        verbose=True,
     )
     wizardlm.run()
 
