@@ -8,6 +8,10 @@ Automatically creates high-complexity instructions from existing instruct-tuned 
 
 Based on https://arxiv.org/abs/2304.12244
 
+## Example
+- Starting (seed) prompt: "What's trending in science & technology?"
+- Auto-generated prompt: "As a researcher in the field of artificial intelligence (AI) and healthcare, you have been tasked with conducting a comprehensive study of the potential of AI in healthcare. Your research must be based on sources that are at least 10 years old, and you must use a minimum of 15 academic sources. Your study must be at least 30 pages long and include a detailed analysis of the current state of AI in healthcare, its potential future developments, and the challenges that need to be addressed to fully realize its potential. Additionally, you must provide a critical evaluation of the existing literature on AI in healthcare, identifying gaps and areas for further research. However, you have been given the additional task of creating a series of recommendations for healthcare organizations and policymakers to help them make informed decisions about the implementation of AI in healthcare. Your recommendations must be evidence-based and take into account the ethical implications of AI in healthcare."
+
 ## Installation
 Create a Python3.10 environment and install the dependencies:
 
