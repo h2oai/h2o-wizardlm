@@ -138,7 +138,7 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
             )
         import json
         import uuid
-        with open("wizard_lm.%s.json" % str(uuid.uuid4())[:4], "wt") as f:
+        with open("wizardlm.%s.json" % str(uuid.uuid4())[:4], "wt") as f:
             f.write(json.dumps(list_qa, indent=2))
 
     def create_seed_prompts(self):
