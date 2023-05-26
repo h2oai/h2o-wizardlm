@@ -338,21 +338,9 @@ class HFPipeline:
 if __name__ == "__main__":
     seed_data = None
 
-    if True:
-        llm_pipeline = HFPipeline(
-            "junelee/wizard-vicuna-13b",
-            # "h2oai/h2ogpt-oig-oasst1-512-6_9b",
-            # "h2oai/h2ogpt-oasst1-512-12b",
-            # "h2oai/h2ogpt-oasst1-512-20b",
-            max_new_tokens=512,
-            # temperature=0.3,
-            # top_k=4,
-            # do_sample=True,
-            # num_beams=2,
-            batch_size=8,
-        )
-
-    if False:
+    llm_pipeline = None
+    try:
+        print("Trying to connect via client.")
         llm_pipeline = GradioClientPipeline(
             "http://localhost:7860",
             instruction='',
@@ -377,6 +365,23 @@ if __name__ == "__main__":
             langchain_mode='Disabled',
             top_k_docs=4,
             document_choice=['All'],
+        )
+    except Exception as e:
+        print("Failed to connect via client: %s" % str(e))
+
+    if llm_pipeline is None:
+        print("Downloading model to run locally.")
+        llm_pipeline = HFPipeline(
+            "junelee/wizard-vicuna-13b",
+            # "h2oai/h2ogpt-oig-oasst1-512-6_9b",
+            # "h2oai/h2ogpt-oasst1-512-12b",
+            # "h2oai/h2ogpt-oasst1-512-20b",
+            max_new_tokens=512,
+            # temperature=0.3,
+            # top_k=4,
+            # do_sample=True,
+            # num_beams=2,
+            batch_size=8,
         )
 
     wizardlm = WizardLM(
