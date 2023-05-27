@@ -1,3 +1,4 @@
+import uuid
 from typing import List
 
 import pandas as pd
@@ -164,7 +165,10 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
         t0 = time.time()
         self.prompts.clear()
         for i in range(self.num_rows):
-            self.prompts.append(np.random.choice(self.seed_text_list))
+            self.prompts.append(
+                "ignore: " + str(uuid.uuid4())[:4] + "\n" +
+                np.random.choice(self.seed_text_list)
+            )
             self.counters.append(0)
         i = 0
         while self.mutate():
