@@ -243,6 +243,8 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
             return False, "prompt leaked 2"
         if "new prompt" in after:
             return False, "prompt leaked 3"
+        if "As an AI assistant" in after:
+            return False, "AI assistant"
         if "sorry" in after.lower() and "sorry" not in before.lower() and len(after) < 400:
             return False, "sorry"
         if False:
@@ -372,7 +374,7 @@ if __name__ == "__main__":
     wizardlm = WizardLM(
         llm_pipeline=llm_pipeline,
         seed_data=None,
-        num_rows=8,
+        num_rows=1024,
         min_len_bytes=256,
         max_len_bytes=1024,
         verbose=True,
