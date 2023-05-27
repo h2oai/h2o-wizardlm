@@ -339,7 +339,7 @@ if __name__ == "__main__":
             iinput='',  # only for chat=True
             context='',
             stream_output=False,
-            prompt_type='human_bot',
+            prompt_type='instruct_vicuna',
             temperature=0.1,
             top_p=0.75,
             top_k=40,
@@ -350,7 +350,7 @@ if __name__ == "__main__":
             max_time=20,
             repetition_penalty=1.0,
             num_return_sequences=1,
-            do_sample=False,
+            do_sample=True,
             chat=False,
             instruction_nochat='', ## Will be set to prompt
             iinput_nochat='',
