@@ -379,7 +379,7 @@ if __name__ == "__main__":
     wizardlm = WizardLM(
         llm_pipeline=llm_pipeline,
         seed_data=seed_data,
-        num_rows=8,
+        num_rows=1024,
         context_len=2048,
         verbose=True,
     )
