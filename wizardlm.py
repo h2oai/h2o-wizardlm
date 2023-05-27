@@ -13,6 +13,7 @@ from tqdm.auto import tqdm
 
 
 class Mutation(Enum):
+    FRESH_START = 0
     ADD_CONSTRAINTS = 1
     DEEPEN = 2
     CONCRETIZE = 3
@@ -28,15 +29,19 @@ class WizardLM:
             seed_data: List[str] = None,
             num_rows: int = 10,
             context_len: int = 2048,
+            min_len_bytes: int = 512,
+            max_len_bytes: int = 1024,
             verbose: bool = False,
     ):
         """
         Open-Source Implementation of https://arxiv.org/abs/2304.12244
 
         :param llm_pipeline: Pipeline that takes a HF dataset containing one string column and returns a list of strings
-        :param seed_data: Optional data to create Q:A pairs from, list of strings
+        :param seed_data: Optional data to create Q:A pairs from, list of strings containing prompts
         :param num_rows: Number of desired Q:A pairs
         :param context_len: Context length, used to limit the created prompts
+        :param min_len_bytes: Lower limit for prompt length in bytes
+        :param max_len_bytes: Upper limit for prompt length in bytes
         :param verbose: Whether to enable verbose printing.
         """
         self.llm_pipeline = llm_pipeline
@@ -44,26 +49,21 @@ class WizardLM:
         self.context_len = context_len
         self.verbose = verbose
         self.seed_text_list = []
-        self.seed_data = seed_data or [
-            "What is e^(i*pi)?",
-            "What's trending in science & technology?",
-            "What's the meaning of life?",
-            "Why is drinking water important?",
-            "What's the difference between dogs and cats?",
-            "Tell me a joke.",
-            "Come up with a random topic that might be interesting to university professor.",
-            "Tell me about quantum physics.",
-            "Tell me about modern art.",
-            "Why should I learn to play the violin?",
-            "Is it better to spend money or save money?",
-            "What are OKRs useful for?",
-        ]
+        self.seed_data = seed_data
         self.counters = []
         self.prompts = []
         self.final_prompts = []
         self.final_answers = []
+        self.min_len_bytes = min_len_bytes
+        self.max_len_bytes = max_len_bytes
         self.prompt_templates = dict()
         self.prompt_templates['base'] = "Act like a very intelligent person."
+        self.prompt_templates[Mutation.FRESH_START] = \
+            self.prompt_templates['base'] + \
+"""
+Write a question about a very rare topic. Almost nobody should be able to provide the correct answer. Create #New Prompt#.
+"""
+
         self.prompt_templates[Mutation.COMPLICATE] = \
             self.prompt_templates['base'] + \
 """
@@ -104,7 +104,7 @@ Make #Given Prompt# slightly more concrete. Create #New Prompt#.
             self.prompt_templates['base'] + \
 """
 If #Given Prompt# can be solved with just a few simple thinking processes, rewrite it to
-explicitly request multiple-step reasoning. Create #New Prompt#.
+explicitly request multi-step reasoning. Create #New Prompt#.
 
 #Given Prompt#:
 <PROMPT>
@@ -150,7 +150,6 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
         :return: None
         """
 
-        assert self.seed_data, "must have seed data"
         import os
         if isinstance(self.seed_data, str) and os.path.exists(self.seed_data):
             data = pd.DataFrame(self.seed_data)
@@ -160,7 +159,7 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
             assert self.seed_text_list, "data import failed, got empty list"
         else:
             assert isinstance(self.seed_text_list, list)
-            self.seed_text_list = self.seed_data
+            self.seed_text_list = self.seed_data or [self.prompt_templates[Mutation.FRESH_START]]
 
     def create_prompts(self):
         print("Creating %d prompts." % self.num_rows)
@@ -200,7 +199,7 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
             mutation = np.random.choice(Mutation)
             mutations.append(mutation)
             before = self.prompts[i]
-            assert "<PROMPT>" in self.prompt_templates[mutation]
+            assert "<PROMPT>" in self.prompt_templates[mutation] or mutation == Mutation.FRESH_START
             prompt = self.prompt_templates[mutation].replace("<PROMPT>", before)
             list_prompts.append(prompt)
 
@@ -224,28 +223,24 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
                 print("===========================")
 
             if use_new_prompt:
-                self.prompts[i] = after[i]
-                print("Prompt was successfully modified.")
-            else:
-                if why == "too long":
+                if self.max_len_bytes >= len(after[i]) >= self.min_len_bytes:
                     self.final_prompts.append(self.prompts[i])
-                    print("Prompt got too complex, previous prompt accepted, now have %d good prompts." % len(self.final_prompts))
+                    print("Prompt was accepted, now have %d good prompts." % len(self.final_prompts))
                     self.prompts[i] = np.random.choice(self.seed_text_list)
                     self.counters[i] = 0
                     print("Creating new prompt.")
-                elif self.counters[i] > 10:
-                    print("Prompt failed to evolve, restarting.")
-                    self.prompts[i] = np.random.choice(self.seed_text_list)
-                    self.counters[i] = 0
                 else:
-                    print("Mutation rejected, will try again. Reason: %s" % why)
+                    self.prompts[i] = after[i]
+                    print("Prompt was successfully modified.")
+            else:
+                print("Mutation rejected, will try again. Reason: %s" % why)
             print("", flush=True)
         return len(self.final_prompts) < self.num_rows
 
     def change_approved(self, before, after):
         if before == after:
             return False, "same"
-        if len(after) > min(1024, self.context_len // 2):  # approx. 1kB is enough (~256 tokens) in general
+        if len(after) > self.max_len_bytes:
             return False, "too long"
         if self.prompt_templates['base'] in after:
             return False, "prompt leaked 1"
