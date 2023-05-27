@@ -28,7 +28,6 @@ class WizardLM:
             llm_pipeline: pipeline = None,
             seed_data: List[str] = None,
             num_rows: int = 10,
-            context_len: int = 2048,
             min_len_bytes: int = 512,
             max_len_bytes: int = 1024,
             verbose: bool = False,
@@ -39,14 +38,12 @@ class WizardLM:
         :param llm_pipeline: Pipeline that takes a HF dataset containing one string column and returns a list of strings
         :param seed_data: Optional data to create Q:A pairs from, list of strings containing prompts
         :param num_rows: Number of desired Q:A pairs
-        :param context_len: Context length, used to limit the created prompts
         :param min_len_bytes: Lower limit for prompt length in bytes
         :param max_len_bytes: Upper limit for prompt length in bytes
         :param verbose: Whether to enable verbose printing.
         """
         self.llm_pipeline = llm_pipeline
         self.num_rows = num_rows
-        self.context_len = context_len
         self.verbose = verbose
         self.seed_text_list = []
         self.seed_data = seed_data
@@ -61,7 +58,7 @@ class WizardLM:
         self.prompt_templates[Mutation.FRESH_START] = \
             self.prompt_templates['base'] + \
 """
-Write a question about a very rare topic. Almost nobody should be able to provide the correct answer. Create #New Prompt#.
+Write a question about a very rare topic. Almost nobody should be able to provide the correct answer. Start with #New Prompt#:
 """
 
         self.prompt_templates[Mutation.COMPLICATE] = \
@@ -224,7 +221,7 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
 
             if use_new_prompt:
                 if self.max_len_bytes >= len(after[i]) >= self.min_len_bytes:
-                    self.final_prompts.append(self.prompts[i])
+                    self.final_prompts.append(after[i])
                     print("Prompt was accepted, now have %d good prompts." % len(self.final_prompts))
                     self.prompts[i] = np.random.choice(self.seed_text_list)
                     self.counters[i] = 0
@@ -240,8 +237,6 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
     def change_approved(self, before, after):
         if before == after:
             return False, "same"
-        if len(after) > self.max_len_bytes:
-            return False, "too long"
         if self.prompt_templates['base'] in after:
             return False, "prompt leaked 1"
         if "#New Prompt#" in after:
@@ -328,8 +323,6 @@ class HFPipeline:
 
 
 if __name__ == "__main__":
-    seed_data = None
-
     llm_pipeline = None
     try:
         print("Trying to connect via client.")
@@ -371,16 +364,17 @@ if __name__ == "__main__":
             max_new_tokens=512,
             # temperature=0.3,
             # top_k=4,
-            # do_sample=True,
+            do_sample=True,
             # num_beams=2,
             batch_size=8,
         )
 
     wizardlm = WizardLM(
         llm_pipeline=llm_pipeline,
-        seed_data=seed_data,
-        num_rows=1024,
-        context_len=2048,
+        seed_data=None,
+        num_rows=8,
+        min_len_bytes=256,
+        max_len_bytes=1024,
         verbose=True,
     )
     wizardlm.run()
