@@ -247,8 +247,8 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
             return False, "prompt leaked 2"
         if "new prompt" in after:
             return False, "prompt leaked 3"
-        if "As an AI assistant" in after:
-            return False, "AI assistant"
+        if "As an AI" in after:
+            return False, "AI"
         if "sorry" in after.lower() and "sorry" not in before.lower() and len(after) < 400:
             return False, "sorry"
         if False:
