@@ -48,7 +48,6 @@ class WizardLM:
         self.verbose = verbose
         self.seed_text_list = []
         self.seed_data = seed_data
-        self.counters = []
         self.prompts = []
         self.final_prompts = []
         self.final_answers = []
@@ -56,10 +55,11 @@ class WizardLM:
         self.max_len_bytes = max_len_bytes
         self.prompt_templates = dict()
         self.prompt_templates['base'] = "Act like a very intelligent person."
+        with open("english-nouns.txt") as f:
+            self.nouns = f.readlines()
+        np.random.seed(1234)
         self.prompt_templates[Mutation.FRESH_START] = \
-            self.prompt_templates['base'] + \
-"""
-Write a question about a very rare topic. Almost nobody should be able to provide the correct answer. Start with #New Prompt#:
+"""Come up with a difficult question about the following topic: <NOUN>. Do not provide the answer. Start with #New Prompt#:
 """
 
         self.prompt_templates[Mutation.COMPLICATE] = \
@@ -157,7 +157,13 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
             assert self.seed_text_list, "data import failed, got empty list"
         else:
             assert isinstance(self.seed_text_list, list)
-            self.seed_text_list = self.seed_data or [self.prompt_templates[Mutation.FRESH_START]]
+            if self.seed_data:
+                self.seed_text_list = self.seed_data
+            else:
+                for n in self.nouns:
+                    self.seed_text_list.append(
+                       self.prompt_templates[Mutation.FRESH_START].replace("<NOUN>", n.strip())
+                    )
 
     def create_prompts(self):
         print("Creating %d prompts." % self.num_rows)
@@ -165,11 +171,8 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
         t0 = time.time()
         self.prompts.clear()
         for i in range(self.num_rows):
-            self.prompts.append(
-                "ignore: " + str(uuid.uuid4())[:4] + "\n" +
-                np.random.choice(self.seed_text_list)
-            )
-            self.counters.append(0)
+            new_prompt = np.random.choice(self.seed_text_list)
+            self.prompts.append(new_prompt)
         i = 0
         while self.mutate():
             print("Iteration: %d" % i)
@@ -200,8 +203,14 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
             mutation = np.random.choice(Mutation)
             mutations.append(mutation)
             before = self.prompts[i]
-            assert "<PROMPT>" in self.prompt_templates[mutation] or mutation == Mutation.FRESH_START
-            prompt = self.prompt_templates[mutation].replace("<PROMPT>", before)
+            assert "<NOUN>" not in before
+            if mutation == Mutation.FRESH_START:
+                prompt = np.random.choice(self.seed_text_list)
+                assert "<NOUN>" not in prompt
+            else:
+                assert "<PROMPT>" in self.prompt_templates[mutation]
+                prompt = self.prompt_templates[mutation].replace("<PROMPT>", before)
+            assert "<NOUN>" not in prompt
             list_prompts.append(prompt)
 
         ds = self.convert_list_to_dataset(list_prompts)
@@ -213,8 +222,10 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
         print("HFPipeline took %.4f seconds" % (t1 - t0))
 
         for i in range(len(after)):
-            self.counters[i] += 1
             after[i] = after[i].split("Prompt#:")[-1].strip()
+            pp = 'New Prompt:\n'
+            if after[i][:len(pp)] == pp:
+                after[i] = after[i][len(pp):]
             use_new_prompt, why = self.change_approved(self.prompts[i], after[i])
             if self.verbose:
                 print("===========================")
@@ -228,10 +239,11 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
                     self.final_prompts.append(after[i])
                     print("Prompt was accepted, now have %d good prompts." % len(self.final_prompts))
                     self.prompts[i] = np.random.choice(self.seed_text_list)
-                    self.counters[i] = 0
+                    assert "<NOUN>" not in self.prompts[i]
                     print("Creating new prompt.")
                 else:
                     self.prompts[i] = after[i]
+                    assert "<NOUN>" not in self.prompts[i]
                     print("Prompt was successfully modified.")
             else:
                 print("Mutation rejected, will try again. Reason: %s" % why)
@@ -245,11 +257,15 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
             return False, "prompt leaked 1"
         if "#New Prompt#" in after:
             return False, "prompt leaked 2"
-        if "new prompt" in after:
+        if "new prompt" in after.lower():
             return False, "prompt leaked 3"
-        if "As an AI" in after:
+        if "how can i assist" in after.lower():
             return False, "AI"
-        if "sorry" in after.lower() and "sorry" not in before.lower() and len(after) < 400:
+        if "as an ai" in after.lower():
+            return False, "AI"
+        if "ai assistant" in after.lower():
+            return False, "AI"
+        if "i'm sorry" in after.lower() and "sorry" not in before.lower() and len(after) < 400:
             return False, "sorry"
         if False:
             # too slow in general, not needed
