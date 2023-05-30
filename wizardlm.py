@@ -207,9 +207,9 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
         for i in range(self.num_rows):
             mutation = np.random.choice(Mutation)
             mutations.append(mutation)
-            before = self.prompts[i]
             if mutation == Mutation.FRESH_START:
-                before = np.random.choice(self.seed_text_list)
+                self.prompts[i] = np.random.choice(self.seed_text_list)
+            before = self.prompts[i]
             prompt = self.prompt_templates[mutation].replace("<PROMPT>", before)
             list_prompts.append(prompt)
 
@@ -227,7 +227,11 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
             if after[i][:len(pp)] == pp:
                 after[i] = after[i][len(pp):]
             after[i] = after[i].replace("As an AI assistant, I", "I")
+            after[i] = after[i].replace("As an AI language model, I", "I")
             after[i] = after[i].replace("As an AI assistant, you", "You")
+            after[i] = after[i].replace("As an AI language model, you", "You")
+            after[i] = after[i].replace("As an AI assistant, what", "What")
+            after[i] = after[i].replace("As an AI language model, what", "What")
             use_new_prompt, why = self.change_approved(self.prompts[i], after[i])
             if self.verbose:
                 print("===========================")
