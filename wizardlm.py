@@ -54,18 +54,23 @@ class WizardLM:
         self.min_len_bytes = min_len_bytes
         self.max_len_bytes = max_len_bytes
         self.prompt_templates = dict()
-        self.prompt_templates['base'] = "Act like a very intelligent person."
+        self.prompt_templates['base'] = "You are acting as an intelligent person."
         with open("english-nouns.txt") as f:
             self.nouns = f.readlines()
         np.random.seed(1234)
         self.prompt_templates[Mutation.FRESH_START] = \
-"""Come up with a difficult question about the following topic: <NOUN>. Do not provide the answer. Start with #New Prompt#:
+            self.prompt_templates['base'] + \
+"""
+Rewrite #Given Prompt# into a question. Create #New Prompt#.
+
+#Given Prompt#:
+<PROMPT>
 """
 
         self.prompt_templates[Mutation.COMPLICATE] = \
             self.prompt_templates['base'] + \
 """
-Rewrite #Given Prompt# to make it slightly more complicated. Create #New Prompt#.
+Rewrite #Given Prompt# to make it slightly more complicated. Do not answer questions. Create #New Prompt#.
 
 #Given Prompt#:
 <PROMPT>
@@ -74,7 +79,7 @@ Rewrite #Given Prompt# to make it slightly more complicated. Create #New Prompt#
         self.prompt_templates[Mutation.ADD_CONSTRAINTS] = \
             self.prompt_templates['base'] + \
 """
-Add a few more constraints or requirements to #Given Prompt#. Create #New Prompt#.
+Add a few more constraints or requirements to #Given Prompt#. Do not answer questions. Create #New Prompt#.
 
 #Given Prompt#:
 <PROMPT>
@@ -83,7 +88,7 @@ Add a few more constraints or requirements to #Given Prompt#. Create #New Prompt
         self.prompt_templates[Mutation.DEEPEN] = \
             self.prompt_templates['base'] + \
 """
-Slightly increase the depth and breadth of #Given Prompt#. Create #New Prompt#.
+Slightly increase the depth and breadth of #Given Prompt#. Do not answer questions. Create #New Prompt#.
 
 #Given Prompt#:
 <PROMPT>
@@ -92,7 +97,7 @@ Slightly increase the depth and breadth of #Given Prompt#. Create #New Prompt#.
         self.prompt_templates[Mutation.CONCRETIZE] = \
             self.prompt_templates['base'] + \
 """
-Make #Given Prompt# slightly more concrete. Create #New Prompt#.
+Make #Given Prompt# slightly more concrete. Do not answer questions. Create #New Prompt#.
 
 #Given Prompt#:
 <PROMPT>
@@ -102,7 +107,7 @@ Make #Given Prompt# slightly more concrete. Create #New Prompt#.
             self.prompt_templates['base'] + \
 """
 If #Given Prompt# can be solved with just a few simple thinking processes, rewrite it to
-explicitly request multi-step reasoning. Create #New Prompt#.
+explicitly request multi-step reasoning. Do not answer questions. Create #New Prompt#.
 
 #Given Prompt#:
 <PROMPT>
@@ -111,7 +116,7 @@ explicitly request multi-step reasoning. Create #New Prompt#.
         self.prompt_templates[Mutation.SWITCH_TOPIC] = \
             self.prompt_templates['base'] + \
 """
-Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty level similar. Create #New Prompt#.
+Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty level similar. Do not answer questions. Create #New Prompt#.
 
 #Given Prompt#:
 <PROMPT>
@@ -162,7 +167,7 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
             else:
                 for n in self.nouns:
                     self.seed_text_list.append(
-                       self.prompt_templates[Mutation.FRESH_START].replace("<NOUN>", n.strip())
+                       self.prompt_templates[Mutation.FRESH_START].replace("<PROMPT>", n.strip())
                     )
 
     def create_prompts(self):
@@ -203,14 +208,9 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
             mutation = np.random.choice(Mutation)
             mutations.append(mutation)
             before = self.prompts[i]
-            assert "<NOUN>" not in before
             if mutation == Mutation.FRESH_START:
-                prompt = np.random.choice(self.seed_text_list)
-                assert "<NOUN>" not in prompt
-            else:
-                assert "<PROMPT>" in self.prompt_templates[mutation]
-                prompt = self.prompt_templates[mutation].replace("<PROMPT>", before)
-            assert "<NOUN>" not in prompt
+                before = np.random.choice(self.seed_text_list)
+            prompt = self.prompt_templates[mutation].replace("<PROMPT>", before)
             list_prompts.append(prompt)
 
         ds = self.convert_list_to_dataset(list_prompts)
@@ -226,6 +226,8 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
             pp = 'New Prompt:\n'
             if after[i][:len(pp)] == pp:
                 after[i] = after[i][len(pp):]
+            after[i] = after[i].replace("As an AI assistant, I", "I")
+            after[i] = after[i].replace("As an AI assistant, you", "You")
             use_new_prompt, why = self.change_approved(self.prompts[i], after[i])
             if self.verbose:
                 print("===========================")
@@ -239,11 +241,9 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
                     self.final_prompts.append(after[i])
                     print("Prompt was accepted, now have %d good prompts." % len(self.final_prompts))
                     self.prompts[i] = np.random.choice(self.seed_text_list)
-                    assert "<NOUN>" not in self.prompts[i]
                     print("Creating new prompt.")
                 else:
                     self.prompts[i] = after[i]
-                    assert "<NOUN>" not in self.prompts[i]
                     print("Prompt was successfully modified.")
             else:
                 print("Mutation rejected, will try again. Reason: %s" % why)
@@ -394,7 +394,7 @@ if __name__ == "__main__":
     wizardlm = WizardLM(
         llm_pipeline=llm_pipeline,
         seed_data=None,
-        num_rows=1024,
+        num_rows=32,
         min_len_bytes=256,
         max_len_bytes=1024,
         verbose=True,
