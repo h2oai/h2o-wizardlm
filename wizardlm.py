@@ -1,4 +1,4 @@
-import uuid
+import ast
 from typing import List
 
 import pandas as pd
@@ -300,7 +300,7 @@ class GradioClientPipeline:
                 *tuple(list(self.kwargs.values())),
                 api_name='/submit_nochat'
             )
-            ret.append(res)
+            ret.append(ast.literal_eval(res)['response'])
         return ret
 
 
