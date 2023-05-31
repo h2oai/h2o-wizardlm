@@ -62,15 +62,11 @@ class WizardLM:
         np.random.seed(seed)
         self.prompt_templates[Mutation.FRESH_START] = \
             self.prompt_templates['base'] + \
-"""Write a question containing one or more of the words listed under #Given Prompt#. Create #New Prompt#.
-
-#Given Prompt#:
-<PROMPT>
-"""
+"""Write one question or request containing one or more of the following words: <PROMPT>"""
 
         self.prompt_templates[Mutation.COMPLICATE] = \
             self.prompt_templates['base'] + \
-"""Rewrite #Given Prompt# to make it slightly more complicated. Do not answer questions. Create #New Prompt#.
+"""Rewrite #Given Prompt# to make it slightly more complicated, and create #New Prompt#.
 
 #Given Prompt#:
 <PROMPT>
@@ -78,7 +74,7 @@ class WizardLM:
 
         self.prompt_templates[Mutation.ADD_CONSTRAINTS] = \
             self.prompt_templates['base'] + \
-"""Add a few more constraints or requirements to #Given Prompt#. Do not answer questions. Create #New Prompt#.
+"""Add a few more constraints or requirements to #Given Prompt#, and create #New Prompt#.
 
 #Given Prompt#:
 <PROMPT>
@@ -86,7 +82,7 @@ class WizardLM:
 
         self.prompt_templates[Mutation.DEEPEN] = \
             self.prompt_templates['base'] + \
-"""Slightly increase the depth and breadth of #Given Prompt#. Do not answer questions. Create #New Prompt#.
+"""Slightly increase the depth and breadth of #Given Prompt#, and create #New Prompt#.
 
 #Given Prompt#:
 <PROMPT>
@@ -94,7 +90,7 @@ class WizardLM:
 
         self.prompt_templates[Mutation.CONCRETIZE] = \
             self.prompt_templates['base'] + \
-"""Make #Given Prompt# slightly more concrete. Do not answer questions. Create #New Prompt#.
+"""Make #Given Prompt# slightly more concrete, and create #New Prompt#.
 
 #Given Prompt#:
 <PROMPT>
@@ -102,8 +98,7 @@ class WizardLM:
 
         self.prompt_templates[Mutation.INCREASE_REASONING] = \
             self.prompt_templates['base'] + \
-"""If #Given Prompt# can be solved with just a few simple thinking processes, rewrite it to
-explicitly request multi-step reasoning. Do not answer questions. Create #New Prompt#.
+"""If #Given Prompt# can be solved with just a few simple thinking processes, rewrite it to explicitly request multi-step reasoning, and create #New Prompt#.
 
 #Given Prompt#:
 <PROMPT>
@@ -111,7 +106,7 @@ explicitly request multi-step reasoning. Do not answer questions. Create #New Pr
 
         self.prompt_templates[Mutation.SWITCH_TOPIC] = \
             self.prompt_templates['base'] + \
-"""Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty level similar. Do not answer questions. Create #New Prompt#.
+"""Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty level similar, and create #New Prompt#.
 
 #Given Prompt#:
 <PROMPT>
@@ -258,6 +253,8 @@ explicitly request multi-step reasoning. Do not answer questions. Create #New Pr
             return False, "same"
         if after.count('\n') > after.count(" ") * 2:
             return False, "too many lines"
+        if after.count('\n') == after.count("- ") > 10:
+            return False, "too many items"
         if self.prompt_templates['base'] and self.prompt_templates['base'] in after:
             return False, "prompt leaked 1"
         if "#New Prompt#" in after:
@@ -400,7 +397,7 @@ if __name__ == "__main__":
     wizardlm = WizardLM(
         llm_pipeline=llm_pipeline,
         seed_data=None,
-        num_rows=4,
+        num_rows=256,
         min_len_bytes=256,
         max_len_bytes=1024,
         verbose=True,
