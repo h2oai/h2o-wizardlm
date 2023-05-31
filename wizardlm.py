@@ -54,7 +54,7 @@ class WizardLM:
         self.min_len_bytes = min_len_bytes
         self.max_len_bytes = max_len_bytes
         self.prompt_templates = dict()
-        self.prompt_templates['base'] = "You are acting as an intelligent person."
+        self.prompt_templates['base'] = ""
         with open("english-nouns.txt") as f:
             self.nouns = f.readlines()
         np.random.seed(1234)
@@ -223,15 +223,16 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
 
         for i in range(len(after)):
             after[i] = after[i].split("Prompt#:")[-1].strip()
-            pp = 'New Prompt:\n'
-            if after[i][:len(pp)] == pp:
-                after[i] = after[i][len(pp):]
+            for pp in ['New Prompt:\n', 'New Prompt: ']:
+                if after[i][:len(pp)] == pp:
+                    after[i] = after[i][len(pp):]
             after[i] = after[i].replace("As an AI assistant, I", "I")
             after[i] = after[i].replace("As an AI language model, I", "I")
             after[i] = after[i].replace("As an AI assistant, you", "You")
             after[i] = after[i].replace("As an AI language model, you", "You")
             after[i] = after[i].replace("As an AI assistant, what", "What")
             after[i] = after[i].replace("As an AI language model, what", "What")
+            after[i] = after[i].strip()
             use_new_prompt, why = self.change_approved(self.prompts[i], after[i])
             if self.verbose:
                 print("===========================")
@@ -257,7 +258,7 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
     def change_approved(self, before, after):
         if before == after:
             return False, "same"
-        if self.prompt_templates['base'] in after:
+        if self.prompt_templates['base'] and self.prompt_templates['base'] in after:
             return False, "prompt leaked 1"
         if "#New Prompt#" in after:
             return False, "prompt leaked 2"
@@ -358,7 +359,7 @@ if __name__ == "__main__":
             iinput='',  # only for chat=True
             context='',
             stream_output=False,
-            prompt_type='instruct_vicuna',
+            prompt_type='wizard_lm',
             temperature=0.1,
             top_p=0.75,
             top_k=40,
@@ -383,7 +384,8 @@ if __name__ == "__main__":
     if llm_pipeline is None:
         print("Downloading model to run locally.")
         llm_pipeline = HFPipeline(
-            "junelee/wizard-vicuna-13b",
+            "ehartford/WizardLM-13B-Uncensored",
+            # "junelee/wizard-vicuna-13b",
             # "h2oai/h2ogpt-oig-oasst1-512-6_9b",
             # "h2oai/h2ogpt-oasst1-512-12b",
             # "h2oai/h2ogpt-oasst1-512-20b",
