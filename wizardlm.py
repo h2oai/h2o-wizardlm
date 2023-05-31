@@ -61,7 +61,7 @@ class WizardLM:
         self.prompt_templates[Mutation.FRESH_START] = \
             self.prompt_templates['base'] + \
 """
-Rewrite #Given Prompt# into a question. Create #New Prompt#.
+Write a question containing one or more of the words listed under #Given Prompt#. Create #New Prompt#.
 
 #Given Prompt#:
 <PROMPT>
@@ -165,9 +165,12 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
             if self.seed_data:
                 self.seed_text_list = self.seed_data
             else:
-                for n in self.nouns:
+                for i in range(self.num_rows):
+                    n = np.random.choice([1, 2, 3, 4])
                     self.seed_text_list.append(
-                       self.prompt_templates[Mutation.FRESH_START].replace("<PROMPT>", n.strip())
+                       self.prompt_templates[Mutation.FRESH_START].replace(
+                           "<PROMPT>",
+                           ", ".join([np.random.choice(self.nouns).strip() for _ in range(n)]))
                     )
 
     def create_prompts(self):
