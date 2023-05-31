@@ -57,11 +57,12 @@ class WizardLM:
         self.prompt_templates['base'] = ""
         with open("english-nouns.txt") as f:
             self.nouns = f.readlines()
-        np.random.seed(1234)
+        seed = None
+        # seed = 1234
+        np.random.seed(seed)
         self.prompt_templates[Mutation.FRESH_START] = \
             self.prompt_templates['base'] + \
-"""
-Write a question containing one or more of the words listed under #Given Prompt#. Create #New Prompt#.
+"""Write a question containing one or more of the words listed under #Given Prompt#. Create #New Prompt#.
 
 #Given Prompt#:
 <PROMPT>
@@ -69,8 +70,7 @@ Write a question containing one or more of the words listed under #Given Prompt#
 
         self.prompt_templates[Mutation.COMPLICATE] = \
             self.prompt_templates['base'] + \
-"""
-Rewrite #Given Prompt# to make it slightly more complicated. Do not answer questions. Create #New Prompt#.
+"""Rewrite #Given Prompt# to make it slightly more complicated. Do not answer questions. Create #New Prompt#.
 
 #Given Prompt#:
 <PROMPT>
@@ -78,8 +78,7 @@ Rewrite #Given Prompt# to make it slightly more complicated. Do not answer quest
 
         self.prompt_templates[Mutation.ADD_CONSTRAINTS] = \
             self.prompt_templates['base'] + \
-"""
-Add a few more constraints or requirements to #Given Prompt#. Do not answer questions. Create #New Prompt#.
+"""Add a few more constraints or requirements to #Given Prompt#. Do not answer questions. Create #New Prompt#.
 
 #Given Prompt#:
 <PROMPT>
@@ -87,8 +86,7 @@ Add a few more constraints or requirements to #Given Prompt#. Do not answer ques
 
         self.prompt_templates[Mutation.DEEPEN] = \
             self.prompt_templates['base'] + \
-"""
-Slightly increase the depth and breadth of #Given Prompt#. Do not answer questions. Create #New Prompt#.
+"""Slightly increase the depth and breadth of #Given Prompt#. Do not answer questions. Create #New Prompt#.
 
 #Given Prompt#:
 <PROMPT>
@@ -96,8 +94,7 @@ Slightly increase the depth and breadth of #Given Prompt#. Do not answer questio
 
         self.prompt_templates[Mutation.CONCRETIZE] = \
             self.prompt_templates['base'] + \
-"""
-Make #Given Prompt# slightly more concrete. Do not answer questions. Create #New Prompt#.
+"""Make #Given Prompt# slightly more concrete. Do not answer questions. Create #New Prompt#.
 
 #Given Prompt#:
 <PROMPT>
@@ -105,8 +102,7 @@ Make #Given Prompt# slightly more concrete. Do not answer questions. Create #New
 
         self.prompt_templates[Mutation.INCREASE_REASONING] = \
             self.prompt_templates['base'] + \
-"""
-If #Given Prompt# can be solved with just a few simple thinking processes, rewrite it to
+"""If #Given Prompt# can be solved with just a few simple thinking processes, rewrite it to
 explicitly request multi-step reasoning. Do not answer questions. Create #New Prompt#.
 
 #Given Prompt#:
@@ -115,8 +111,7 @@ explicitly request multi-step reasoning. Do not answer questions. Create #New Pr
 
         self.prompt_templates[Mutation.SWITCH_TOPIC] = \
             self.prompt_templates['base'] + \
-"""
-Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty level similar. Do not answer questions. Create #New Prompt#.
+"""Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty level similar. Do not answer questions. Create #New Prompt#.
 
 #Given Prompt#:
 <PROMPT>
@@ -165,7 +160,7 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
             if self.seed_data:
                 self.seed_text_list = self.seed_data
             else:
-                for i in range(self.num_rows):
+                for i in range(self.num_rows * 10):
                     n = np.random.choice([1, 2, 3, 4])
                     self.seed_text_list.append(
                        self.prompt_templates[Mutation.FRESH_START].replace(
@@ -364,7 +359,7 @@ if __name__ == "__main__":
             iinput='',  # only for chat=True
             context='',
             stream_output=False,
-            prompt_type='wizard_lm',
+            prompt_type='human_bot',
             temperature=0.1,
             top_p=0.75,
             top_k=40,
@@ -373,9 +368,9 @@ if __name__ == "__main__":
             min_new_tokens=0,
             early_stopping=False,
             max_time=20,
-            repetition_penalty=1.0,
+            repetition_penalty=1.07,
             num_return_sequences=1,
-            do_sample=True,
+            do_sample=False,
             chat=False,
             instruction_nochat='', ## Will be set to prompt
             iinput_nochat='',
@@ -389,11 +384,11 @@ if __name__ == "__main__":
     if llm_pipeline is None:
         print("Downloading model to run locally.")
         llm_pipeline = HFPipeline(
-            "ehartford/WizardLM-13B-Uncensored",
+            # "ehartford/WizardLM-13B-Uncensored",
             # "junelee/wizard-vicuna-13b",
             # "h2oai/h2ogpt-oig-oasst1-512-6_9b",
             # "h2oai/h2ogpt-oasst1-512-12b",
-            # "h2oai/h2ogpt-oasst1-512-20b",
+            "h2oai/h2ogpt-oasst1-512-20b",
             max_new_tokens=512,
             # temperature=0.3,
             # top_k=4,
@@ -405,7 +400,7 @@ if __name__ == "__main__":
     wizardlm = WizardLM(
         llm_pipeline=llm_pipeline,
         seed_data=None,
-        num_rows=32,
+        num_rows=4,
         min_len_bytes=256,
         max_len_bytes=1024,
         verbose=True,
