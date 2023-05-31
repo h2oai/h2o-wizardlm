@@ -261,6 +261,8 @@ Rewrite #Given Prompt# by switching the topic, keeping the domain and difficulty
     def change_approved(self, before, after):
         if before == after:
             return False, "same"
+        if after.count('\n') > after.count(" ") * 2:
+            return False, "too many lines"
         if self.prompt_templates['base'] and self.prompt_templates['base'] in after:
             return False, "prompt leaked 1"
         if "#New Prompt#" in after:
