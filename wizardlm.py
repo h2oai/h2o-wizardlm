@@ -172,7 +172,7 @@ class WizardLM:
             new_prompt = np.random.choice(self.seed_text_list)
             self.prompts.append(new_prompt)
         i = 0
-        while self.mutate():
+        while self.mutate(i):
             print("Iteration: %d" % i)
             i += 1
         t1 = time.time()
@@ -193,7 +193,7 @@ class WizardLM:
         ds['train'] = Dataset.from_pandas(df)
         return ds
 
-    def mutate(self):
+    def mutate(self, iteration):
         assert len(self.prompts) == self.num_rows
         list_prompts = []
         mutations = []
@@ -203,7 +203,7 @@ class WizardLM:
             if mutation == Mutation.FRESH_START:
                 self.prompts[i] = np.random.choice(self.seed_text_list)
             before = self.prompts[i]
-            prompt = self.prompt_templates[mutation].replace("<PROMPT>", before)
+            prompt = self.prompt_templates[mutation].replace("<PROMPT>", before) if iteration else before
             list_prompts.append(prompt)
 
         ds = self.convert_list_to_dataset(list_prompts)
@@ -397,7 +397,7 @@ if __name__ == "__main__":
     wizardlm = WizardLM(
         llm_pipeline=llm_pipeline,
         seed_data=None,
-        num_rows=256,
+        num_rows=8,
         min_len_bytes=256,
         max_len_bytes=1024,
         verbose=True,
