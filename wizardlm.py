@@ -12,6 +12,9 @@ from transformers import pipeline
 from transformers.pipelines.pt_utils import KeyDataset
 from tqdm.auto import tqdm
 
+import markdown
+from bs4 import BeautifulSoup
+
 
 class Mutation(Enum):
     FRESH_START = 0
@@ -198,10 +201,14 @@ class WizardLM:
         list_prompts = []
         mutations = []
         for i in range(self.num_rows):
-            mutation = np.random.choice(Mutation)
-            mutations.append(mutation)
-            if mutation == Mutation.FRESH_START:
-                self.prompts[i] = np.random.choice(self.seed_text_list)
+            if iteration == 0 or "Write one question or request containing" in self.prompts[i]:
+                mutation = Mutation.FRESH_START
+                mutations.append(mutation)
+            else:
+                mutation = np.random.choice(Mutation)
+                mutations.append(mutation)
+                if mutation == Mutation.FRESH_START:
+                    self.prompts[i] = np.random.choice(self.seed_text_list)
             before = self.prompts[i]
             prompt = self.prompt_templates[mutation].replace("<PROMPT>", before) if iteration else before
             list_prompts.append(prompt)
@@ -295,11 +302,20 @@ class GradioClientPipeline:
         for d in dataset:
             self.kwargs['instruction_nochat'] = d['text']
             res = self.client.predict(
-                *tuple(list(self.kwargs.values())),
-                api_name='/submit_nochat'
+                str(dict(self.kwargs)),
+                api_name='/submit_nochat_api'
             )
-            ret.append(ast.literal_eval(res)['response'])
+            ret.append(md_to_text(ast.literal_eval(res)['response']))
         return ret
+
+
+def md_to_text(md, do_md_to_text=True):
+    if not do_md_to_text:
+        return md
+    assert md is not None, "Markdown is None"
+    html = markdown.markdown(md)
+    soup = BeautifulSoup(html, features='html.parser')
+    return soup.get_text()
 
 
 class HFPipeline:
@@ -351,12 +367,13 @@ if __name__ == "__main__":
     try:
         print("Trying to connect via client.")
         llm_pipeline = GradioClientPipeline(
-            "http://localhost:7860",
+            "https://3c4be9cfc5b1ebb838.gradio.live",
             instruction='',
             iinput='',  # only for chat=True
             context='',
             stream_output=False,
             prompt_type='human_bot',
+            prompt_dict='',
             temperature=0.1,
             top_p=0.75,
             top_k=40,
@@ -373,6 +390,8 @@ if __name__ == "__main__":
             iinput_nochat='',
             langchain_mode='Disabled',
             top_k_docs=4,
+            chunk=True,
+            chunk_size=512,
             document_choice=['All'],
         )
     except Exception as e:
